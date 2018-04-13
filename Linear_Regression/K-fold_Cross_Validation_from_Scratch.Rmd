@@ -1,0 +1,77 @@
+---
+title: "Linear Regression using k-fold cross validation"
+author: "Holly Capell"
+output: pdf_document
+---
+
+```{r setup, include=FALSE, warning=F}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(gtools)
+library(GGally)
+library(tidyr)
+library(ggplot2)
+library(scales)
+```
+
+
+```{r 1}
+  
+kfold.cv.lm <- function(k, seed, X, y, which.betas){
+  set.seed(seed)
+  
+  X <-  data.frame(X)    # Convert X to a dataframe in order to randomly shuffle rows
+  Xjoin <- cbind(X,y)
+  # Randomly shuffle rows of X in order to generate random k groups
+  X <-  Xjoin[sample(nrow(Xjoin)),]   
+  y <- X[,ncol(X)]
+  # Convert X back to a matrix in order to facilitate linear modeling
+  X <-  data.matrix(X[,1:ncol(X)-1])    
+  
+  
+  folds <- cut(seq(1,nrow(X)),breaks=k,labels=FALSE)   # Create folds
+  
+  MSEs <- numeric(k)   # Create empty vector to fill with MSEs for each test set
+  MSPEs <- numeric(k)    # Create empty vector to fill with MSPEs for each test set
+  
+  for (fold in 1:k){
+    testIndices <- which(folds==fold,arr.ind=TRUE)   # Select indices for test set 
+    
+    testSet <- X[testIndices, ]   # Create test set
+    trainingSet <- X[-testIndices, ]    # Create training set
+    test_y <- y[testIndices]   # Separate y's for test set
+    training_y <- y[-testIndices]   # Separate y's for training set
+    
+    # Use conditional to handle instance of which.betas all False
+    if (sum(which.betas) == 0){
+      model <- lm(training_y ~ 1)    # Create linear model of just the intercept
+    } else {
+      model <- lm(training_y ~ trainingSet[, which.betas])    # Create linear model
+    }
+    
+    
+    # Create predicted y values using linear model on test data
+    y_hats <-  model$coefficients[1] + 
+      as.matrix(testSet[,which.betas]) %*% model$coefficients[-1]
+    
+    # Calculate MSE for training set
+    MSE <-  0 
+    MSE <- sum((as.matrix(training_y) - model$fitted.values)**2)
+    MSE <-  MSE/length(training_y)
+    MSEs[fold] <-  MSE   # Add this calculated MSE to the list of MSEs
+    
+    # Calculate MSPE for test set
+    MSPE <-  0
+    MSPE <- sum((test_y - y_hats)**2)
+    MSPE <-  MSPE/nrow(testSet)
+    MSPEs[fold] <-  MSPE   # Add this calculated MSPE to the list of MSEs
+  }
+  
+  avgMSE <- mean(MSEs)
+  avgMSPE <- mean(MSPEs)
+  
+  returnVals <- c(avgMSE, avgMSPE)
+  return (returnVals)
+}
+```
+
